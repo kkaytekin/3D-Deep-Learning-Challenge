@@ -39,7 +39,7 @@ def normalize_pc(pc_np):
     pc_np -= np.mean(pc_np,axis=0)
     max_dist = pc_np.max() if pc_np.max() > (-pc_np.min()) else (-pc_np.min())
     pc_np_norm = pc_np / max_dist
-    return
+    return pc_np_norm
 
 def voxelize(points, voxel_size=(28, 28, 28), padding_size=(32, 32, 32), resolution=0.1):
     # Voxelization implementation from VoxNet. Faster.
@@ -90,6 +90,13 @@ def spectify(points):
     ### Complete for task 3
     # Find the spectral embedding of the cloud
     # input numpy ndarray -> output numpy ndarray
+    embedding = SpectralEmbedding(n_components=3,
+                                  affinity='nearest_neighbors',
+                                  n_neighbors=None,
+                                  random_state=1,
+                                  n_jobs=-1
+                                  )
+    points_transformed = embedding.fit_transform(points)
 
     return emb
 
@@ -128,9 +135,31 @@ def mesh_parser(mesh,parse_to):
     elif parse_to=='voxel':
         ### Complete for task 2
         pc_o3d=o3d.geometry.PointCloud()
+
+        ## Sample points
+        # Uniform sampling is faster
         pc_o3d=o3d.geometry.TriangleMesh.sample_points_uniformly(mesh,number_of_points=1024)
-        vox_np = normalize_pc(np.asarray(pc_o3d.points))
-        vox_np = voxelize(vox_np)
+        # For the dresser, poisson disk sampling yields more complete voxelizations.
+        # But it is slower and the gaps in the voxelized geometries serve as regularization, so I stick to
+        # uniform point sampling.
+        #pc_o3d=o3d.geometry.TriangleMesh.sample_points_poisson_disk(mesh_o3d,number_of_points=4096)
+
+        ## VoxNet Implementation
+        # vox_np = normalize_pc(np.asarray(pc_o3d.points))
+        # vox_np = voxelize(vox_np)
+
+        # Fit to unit cube
+        # pc_o3d.scale(1 / np.max(pc_o3d.get_max_bound() - pc_o3d.get_min_bound()),
+        #   center=pc_o3d.get_center())
+        pc_o3d.points = o3d.utility.Vector3dVector( normalize_pc( np.asarray(pc_o3d.points)) )
+
+        voxel_size = 32
+        vox_o3d=o3d.geometry.VoxelGrid().create_from_point_cloud(pc_o3d,2/32)
+
+        vox_np = np.zeros((32,32,32),dtype=np.float)
+        for voxel in vox_o3d.get_voxels():
+            vox_np[voxel.grid_index] = 1.0
+
         return torch.from_numpy(vox_np).to(dtype=torch.float)
     elif parse_to=='spectral':
         pc_o3d=o3d.geometry.PointCloud()
@@ -186,7 +215,6 @@ def test_pcd(mesh_o3d):
     pc_o3d = o3d.geometry.PointCloud()
     pc_o3d = o3d.geometry.TriangleMesh.sample_points_uniformly(mesh_o3d,number_of_points=1024)
     pc_o3d.points  = normalize_pc(np.asarray(pc_o3d.points))
-    #vis_points(pc_np)
 
     # TODO: advanced test
     # create 3D bounding box with edge length 1. plot it together with pcd to see if everything fits inside.
@@ -197,14 +225,21 @@ def test_voxel(mesh_o3d):
     # Creating from mesh takes forever. create from pcd
     #vox_o3d=o3d.geometry.VoxelGrid().create_from_triangle_mesh(mesh_o3d, 1)
     pc_o3d = o3d.geometry.PointCloud()
-    pc_o3d=o3d.geometry.TriangleMesh.sample_points_uniformly(mesh_o3d,number_of_points=4096)
+    pc_o3d = o3d.geometry.TriangleMesh.sample_points_uniformly(mesh_o3d,number_of_points=4096)
     # For the dresser, poisson disk sampling yields more complete voxelizations.
     # But it is slower and the gaps in the voxelized geometries serve as regularization, so I stick to
     # uniform point sampling.
     #pc_o3d=o3d.geometry.TriangleMesh.sample_points_poisson_disk(mesh_o3d,number_of_points=4096)
-    pc_o3d.points  = o3d.utility.Vector3dVector( normalize_pc(np.asarray(pc_o3d.points)) )
+    pc_o3d.points = o3d.utility.Vector3dVector( normalize_pc( np.asarray(pc_o3d.points)) )
 
-    vox_o3d=o3d.geometry.VoxelGrid().create_from_point_cloud(pc_o3d,0.05)
+    #pc_o3d= pc_o3d.scale(1 / np.max(pc_o3d.get_max_bound() - pc_o3d.get_min_bound()),
+    #  center=pc_o3d.get_center())
+    voxel_size = 32
+    vox_o3d=o3d.geometry.VoxelGrid().create_from_point_cloud(pc_o3d,2/32)
+
+    voxels = np.zeros((32,32,32))
+    for voxel in vox_o3d.get_voxels():
+        voxels[voxel.grid_index] = 1
     vis_voxel_o3d(vox_o3d)
 
 ex_from_diff_class = {'airplane' : 'airplane_0628.off',
