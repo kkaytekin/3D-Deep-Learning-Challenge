@@ -1,0 +1,5 @@
+dataset/*
+model_objs/*
+processed/*
+*.pdf
+*.txt
