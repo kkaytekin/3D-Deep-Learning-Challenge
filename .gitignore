@@ -1,5 +1,7 @@
 dataset/*
 model_objs/*
 processed/*
+runs/*
+__pycache__/*
 *.pdf
 *.txt

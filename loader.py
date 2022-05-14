@@ -37,7 +37,8 @@ def normalize_pc(pc_np):
 
     ## Approach 3: Just normalize by max dist
     pc_np -= np.mean(pc_np,axis=0)
-    max_dist = pc_np.max() if pc_np.max() > (-pc_np.min()) else (-pc_np.min())
+    # max_dist = pc_np.max() if pc_np.max() > (-pc_np.min()) else (-pc_np.min())
+    max_dist = pc_np.max()-pc_np.min()
     pc_np_norm = pc_np / max_dist
     return pc_np_norm
 
@@ -45,12 +46,7 @@ def spectify(points):
     ### Complete for task 3
     # Find the spectral embedding of the cloud
     # input numpy ndarray -> output numpy ndarray
-    embedding = SpectralEmbedding(n_components=3,
-                                  affinity='nearest_neighbors',
-                                  n_neighbors=None,
-                                  random_state=1,
-                                  n_jobs=-1
-                                  )
+    embedding = SpectralEmbedding(n_components=3)
     points_transformed = embedding.fit_transform(points)
     return np.concatenate((points,points_transformed),axis=-1)
 
@@ -75,7 +71,6 @@ def vis_points(points):
         points_o3d.points=o3d.utility.Vector3dVector(points)
         o3d.visualization.draw_geometries([points_o3d],mesh_show_wireframe=True)
 
-
 def mesh_parser(mesh,parse_to):
     # Parses the query mesh into different representations
     if parse_to=='point':
@@ -89,38 +84,34 @@ def mesh_parser(mesh,parse_to):
 
         ## Sample points
         # Uniform sampling is faster
-        pc_o3d=o3d.geometry.TriangleMesh.sample_points_uniformly(mesh,number_of_points=1024)
-        # For the dresser, poisson disk sampling yields more complete voxelizations.
+        pc_o3d=o3d.geometry.TriangleMesh.sample_points_uniformly(mesh,number_of_points=4096)
+        # Poisson disk sampling yields more better voxelizations.
         # But it is slower and the gaps in the voxelized geometries serve as regularization, so I stick to
         # uniform point sampling.
-        #pc_o3d=o3d.geometry.TriangleMesh.sample_points_poisson_disk(mesh_o3d,number_of_points=4096)
-
-        ## VoxNet Implementation
-        # vox_np = normalize_pc(np.asarray(pc_o3d.points))
-        # vox_np = voxelize(vox_np)
+        # pc_o3d=o3d.geometry.TriangleMesh.sample_points_poisson_disk(mesh,number_of_points=4096)
 
         # Fit to unit cube
-        # pc_o3d.scale(1 / np.max(pc_o3d.get_max_bound() - pc_o3d.get_min_bound()),
-        #   center=pc_o3d.get_center())
         pc_o3d.points = o3d.utility.Vector3dVector( normalize_pc( np.asarray(pc_o3d.points)) )
 
         voxel_size = 32
-        vox_o3d=o3d.geometry.VoxelGrid().create_from_point_cloud(pc_o3d,2/32)
-
+        vox_o3d=o3d.geometry.VoxelGrid().create_from_point_cloud(pc_o3d,1/voxel_size)
+        # vis_voxel_o3d(vox_o3d)
         vox_np = np.zeros((32,32,32),dtype=np.float)
-        for voxel in vox_o3d.get_voxels():
-            vox_np[voxel.grid_index] = 1.0
+        #vox_np = -np.ones((32,32,32),dtype=np.float)
+        # for voxel in vox_o3d.get_voxels():
+        #     vox_np[voxel.grid_index-1] = 1.0
+        voxel_grid_idxs = np.array([vox.grid_index for vox in vox_o3d.get_voxels()])
+        vox_np[voxel_grid_idxs[:, 0]-1, voxel_grid_idxs[:, 1]-1, voxel_grid_idxs[:, 2]-1] = 1
 
         return torch.from_numpy(vox_np).to(dtype=torch.float)
     elif parse_to=='spectral':
         pc_o3d=o3d.geometry.PointCloud()
         pc_o3d=o3d.geometry.TriangleMesh.sample_points_uniformly(mesh,number_of_points=1024)
         ### Complete for task 3
-        spect_np=spectify(np.asarray(pc_o3d.points))
+        spect_np=spectify( normalize_pc(np.asarray(pc_o3d.points)) )
         return torch.from_numpy(spect_np).to(dtype=torch.float)
-
-    
-
+    elif parse_to=='fused':
+        pass
 
 class ChallengeDataset(Dataset):
 
@@ -159,7 +150,6 @@ class ChallengeDataset(Dataset):
 
     def __len__(self):
         return len(self.file_list)
-
 
 def test_pcd(mesh_o3d):
     pc_np = mesh_parser(mesh_o3d,'point').numpy()
@@ -209,7 +199,7 @@ if __name__ == "__main__":
     for key,value in ex_from_diff_class.items():
         path = os.path.join(os.getcwd(),'dataset',key,'test',value)
         mesh_o3d=o3d.io.read_triangle_mesh(path)
-        #test_voxel(mesh_o3d)
+        test_voxel(mesh_o3d)
         #test_pcd(mesh_o3d)
-        test_spectral(mesh_o3d)
+        #test_spectral(mesh_o3d)
 

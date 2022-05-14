@@ -53,9 +53,7 @@ class trainer():
             if self.ifgpu:
                 inputs=inputs.to(device='cuda:0')
                 targets = targets.to(device='cuda:0')
-
             outputs = self.model(inputs)
-            
             loss = self.criterion(outputs, targets)
             loss.backward()
             losssum_ep += loss.item()
@@ -95,5 +93,3 @@ class trainer():
         print('Accuracy: %.2f percent' % (corrects*100 / (samples_sum)))
         self.writer.add_scalar('accuracy',corrects*100 /  samples_sum ,epoch)
         return (losssum_ep / samples_sum)
-
-
