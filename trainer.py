@@ -53,7 +53,10 @@ class trainer():
             if self.ifgpu:
                 inputs=inputs.to(device='cuda:0')
                 targets = targets.to(device='cuda:0')
-            outputs = self.model(inputs)
+            if self.rep_type == 'fused':
+                outputs = self.model(*inputs)
+            else:
+                outputs = self.model(inputs)
             loss = self.criterion(outputs, targets)
             loss.backward()
             losssum_ep += loss.item()
@@ -81,8 +84,11 @@ class trainer():
             if self.ifgpu:
                 inputs=inputs.to(device='cuda:0')
                 targets = targets.to(device='cuda:0')
-            
-            outputs = self.model(inputs)
+
+            if self.rep_type == 'fused':
+                outputs = self.model(*inputs)
+            else:
+                outputs = self.model(inputs)
             corrects += targets.eq(torch.max(outputs,1)[1]).sum().item()
             loss = self.criterion(outputs, targets)
             losssum_ep+=loss.item()

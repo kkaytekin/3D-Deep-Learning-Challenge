@@ -19,25 +19,20 @@ def normalize_pc(pc_np):
     # Normalize the cloud to unit cube
     # input numpy ndarray -> output numpy ndarray
 
-    # Different approaches exist. I think they are also efficient ways to preprocess the data, but they are not normalizing to unit cube.
-    ## Approach 1: Normalize to unit cube
-    # Max Manhattan distance should be 1.
-    # manhattan_dists = np.sum(pc_np,axis=1)
-    # max_dist = manhattan_dists.max() if manhattan_dists.max() > (-manhattan_dists.min()) else (-manhattan_dists.min())
-    # pc_np_norm = pc_np / max_dist
-
-    ## Approach 2: Normalize to unit sphere
+    # Different approaches exist.
+    ## Approach 1: Normalize to unit sphere
     # pc_np -= np.mean(pc_np,axis=0)
-    # max_norm = 0.0
-    # for i in range(pc_np.shape[0]):
-    #     norm = np.linalg.norm(pc_np[i,:])
-    #     if norm > max_norm:
-    #         max_norm = norm
+    # max_norm = np.max(np.linalg.norm(pc_np,axis=-1))
     # pc_np_norm = pc_np / max_norm
 
-    ## Approach 3: Just normalize by max dist
-    pc_np -= np.mean(pc_np,axis=0)
+    ## Approach 2: Normalize to unit cube
+    # pc_np -= np.mean(pc_np,axis=0)
     # max_dist = pc_np.max() if pc_np.max() > (-pc_np.min()) else (-pc_np.min())
+    # pc_np_norm = pc_np / max_dist
+    # return pc_np_norm
+
+    ## Approach 3: Just normalize by max dist. Reduces the need for padding for voxelization.
+    pc_np -= np.mean(pc_np,axis=0)
     max_dist = pc_np.max()-pc_np.min()
     pc_np_norm = pc_np / max_dist
     return pc_np_norm
@@ -48,7 +43,7 @@ def spectify(points):
     # input numpy ndarray -> output numpy ndarray
     embedding = SpectralEmbedding(n_components=3)
     points_transformed = embedding.fit_transform(points)
-    return np.concatenate((points,points_transformed),axis=-1)
+    return points_transformed
 
 def group_knn(points,seed_points,group_size):
     # Builds a list of point groups around seed_points, can optionally be used
@@ -85,33 +80,40 @@ def mesh_parser(mesh,parse_to):
         ## Sample points
         # Uniform sampling is faster
         pc_o3d=o3d.geometry.TriangleMesh.sample_points_uniformly(mesh,number_of_points=4096)
-        # Poisson disk sampling yields more better voxelizations.
+        # Poisson disk sampling yields denser voxelizations.
         # But it is slower and the gaps in the voxelized geometries serve as regularization, so I stick to
         # uniform point sampling.
         # pc_o3d=o3d.geometry.TriangleMesh.sample_points_poisson_disk(mesh,number_of_points=4096)
 
         # Fit to unit cube
         pc_o3d.points = o3d.utility.Vector3dVector( normalize_pc( np.asarray(pc_o3d.points)) )
-
+        # Voxelize
         voxel_size = 32
         vox_o3d=o3d.geometry.VoxelGrid().create_from_point_cloud(pc_o3d,1/voxel_size)
         # vis_voxel_o3d(vox_o3d)
         vox_np = np.zeros((32,32,32),dtype=np.float)
-        #vox_np = -np.ones((32,32,32),dtype=np.float)
-        # for voxel in vox_o3d.get_voxels():
-        #     vox_np[voxel.grid_index-1] = 1.0
         voxel_grid_idxs = np.array([vox.grid_index for vox in vox_o3d.get_voxels()])
         vox_np[voxel_grid_idxs[:, 0]-1, voxel_grid_idxs[:, 1]-1, voxel_grid_idxs[:, 2]-1] = 1
-
         return torch.from_numpy(vox_np).to(dtype=torch.float)
     elif parse_to=='spectral':
         pc_o3d=o3d.geometry.PointCloud()
         pc_o3d=o3d.geometry.TriangleMesh.sample_points_uniformly(mesh,number_of_points=1024)
         ### Complete for task 3
-        spect_np=spectify( normalize_pc(np.asarray(pc_o3d.points)) )
+        pc_np = normalize_pc(np.asarray(pc_o3d.points))
+        spect_np=spectify( pc_np )
+        np.concatenate((pc_np,spect_np),axis=-1)
         return torch.from_numpy(spect_np).to(dtype=torch.float)
     elif parse_to=='fused':
-        pass
+        pc_o3d=o3d.geometry.PointCloud()
+        pc_o3d=o3d.geometry.TriangleMesh.sample_points_poisson_disk(mesh,number_of_points=1024)
+        pc_np = normalize_pc(np.asarray(pc_o3d.points))
+        pc_o3d.points = o3d.utility.Vector3dVector(pc_np)
+        voxel_size = 32
+        vox_o3d=o3d.geometry.VoxelGrid().create_from_point_cloud(pc_o3d,1/voxel_size)
+        vox_np = np.zeros((32,32,32),dtype=np.float)
+        voxel_grid_idxs = np.array([vox.grid_index for vox in vox_o3d.get_voxels()])
+        vox_np[voxel_grid_idxs[:, 0]-1, voxel_grid_idxs[:, 1]-1, voxel_grid_idxs[:, 2]-1] = 1
+        return torch.from_numpy(pc_np).to(dtype=torch.float) , torch.from_numpy(vox_np).to(dtype=torch.float)
 
 class ChallengeDataset(Dataset):
 

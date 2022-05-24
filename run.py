@@ -76,7 +76,7 @@ def bonus():
         net = torch.load(path_model)
         print('Training from saved model')
     else:
-        net = spectral_model(NUM_CLASSES) # voxel_model(n) or point_model(n) or spectral_model(n)
+        net = fused_model(NUM_CLASSES) # voxel_model(n) or point_model(n) or spectral_model(n)
         print('Training from scratch')
 
     ch_trainer=trainer(net,loader_train,loader_test,rep_type)
@@ -85,4 +85,5 @@ def bonus():
 if __name__=='__main__':
     # task1() #run for task1
     # task2() #run for task2
-    task3() #run for task3
+    # task3() #run for task3
+    bonus()

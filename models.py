@@ -60,7 +60,34 @@ class point_model(nn.Module):
 #         xb = self.fc2(xb)
 #         return xb
 
-# Architecture 2
+# Architecture 2: 3D Shape Net.
+# class voxel_model(nn.Module):
+#     ### Complete for task 2
+#     def __init__(self,num_classes):
+#         super(voxel_model, self).__init__()
+#         self.conv1=nn.Conv3d(1,48,6,stride=2)
+#         self.conv2=nn.Conv3d(48,160,5,stride=2)
+#         self.conv3=nn.Conv3d(160,512,4)
+#         self.fc1=nn.Linear(512,128)
+#         self.fc2=nn.Linear(128,num_classes)
+#
+#         self.bn1 = nn.BatchNorm3d(48)
+#         self.bn2 = nn.BatchNorm3d(160)
+#         self.bn3 = nn.BatchNorm3d(512)
+#         self.bn4 = nn.BatchNorm1d(128)
+#
+#     def forward(self,x):
+#         x = x.unsqueeze(1)
+#         xb = F.relu(self.bn1(self.conv1(x)))
+#         xb = F.relu(self.bn2(self.conv2(xb)))
+#         xb = F.relu(self.bn3(self.conv3(xb)))
+#         xb = F.max_pool3d(xb,2)
+#         xb = nn.Flatten()(xb)
+#         xb = F.relu(self.bn4(self.fc1(xb)))
+#         xb = self.fc2(xb)
+#         return xb
+
+# Architecture 3
 class voxel_model(nn.Module):
     ### Complete for task 2
     def __init__(self,num_classes):
@@ -91,33 +118,6 @@ class voxel_model(nn.Module):
         xb = self.fc2(xb)
         return xb
 
-# Architecture 3: 3D Shape Net. less than 20% acc.
-# class voxel_model(nn.Module):
-#     ### Complete for task 2
-#     def __init__(self,num_classes):
-#         super(voxel_model, self).__init__()
-#         self.conv1=nn.Conv3d(1,48,6,stride=2)
-#         self.conv2=nn.Conv3d(48,160,5,stride=2)
-#         self.conv3=nn.Conv3d(160,512,4)
-#         self.fc1=nn.Linear(512,128)
-#         self.fc2=nn.Linear(128,num_classes)
-#
-#         self.bn1 = nn.BatchNorm3d(48)
-#         self.bn2 = nn.BatchNorm3d(160)
-#         self.bn3 = nn.BatchNorm3d(512)
-#         self.bn4 = nn.BatchNorm1d(128)
-#
-#     def forward(self,x):
-#         x = x.unsqueeze(1)
-#         xb = F.relu(self.bn1(self.conv1(x)))
-#         xb = F.relu(self.bn2(self.conv2(xb)))
-#         xb = F.relu(self.bn3(self.conv3(xb)))
-#         xb = F.max_pool3d(xb,2)
-#         xb = nn.Flatten()(xb)
-#         xb = F.relu(self.bn4(self.fc1(xb)))
-#         xb = self.fc2(xb)
-#         return xb
-
 class spectral_model(nn.Module):
     ### Complete for task 3
     def __init__(self,num_classes):
@@ -145,3 +145,20 @@ class spectral_model(nn.Module):
         xb = F.relu(self.bn5(self.fc2(xb)))
         xb = self.fc3(xb)
         return xb
+
+class fused_model(nn.Module):
+    def __init__(self,num_classes):
+        super(fused_model,self).__init__()
+        self.point_net = point_model(num_classes)
+        self.voxel_net = voxel_model(num_classes)
+        self.fc1 = nn.Linear(16,16)
+        self.bn1 = nn.BatchNorm1d(16)
+        self.fc2 = nn.Linear(16,num_classes)
+        self.do = nn.Dropout(0.5)
+
+    def forward(self,points,voxels):
+        point_features = self.point_net(points)
+        voxel_features = self.voxel_net(voxels)
+        all_features = torch.cat((point_features,voxel_features),dim=-1)
+        x = F.relu(self.do(self.bn1(self.fc1(all_features))))
+        return self.fc2(x)
