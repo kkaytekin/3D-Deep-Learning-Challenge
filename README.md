@@ -1,5 +1,5 @@
 # AT3DCV - 3D Deep Learning Challenge
-An task completed for the first phase of the Practical: Advanced Topics for 3D Computer Vision in TU Munich
+Completed for the first phase of the Practical: Advanced Topics for 3D Computer Vision in TU Munich
 
 Containts four small architectures for 3D Object Classification:
 * Point-cloud network
